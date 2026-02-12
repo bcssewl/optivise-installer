@@ -1,17 +1,11 @@
+& {
 <#
 .SYNOPSIS
-    Installs or uninstalls the Optivise AI add-in for Microsoft Office on Windows.
+    Installs the Optivise AI add-in for Microsoft Office on Windows.
 
 .EXAMPLE
-    # Install
-    irm https://optivise.app/install.ps1 | iex
-
-    # Uninstall
-    .\install-windows.ps1 -Uninstall
+    irm https://raw.githubusercontent.com/bcssewl/optivise-installer/main/scripts/install-windows.ps1 | iex
 #>
-param(
-    [switch]$Uninstall
-)
 
 $ErrorActionPreference = "Stop"
 
@@ -58,24 +52,6 @@ function Write-Fail($msg) {
     Write-Host " $msg" -ForegroundColor Red
 }
 
-function Write-Spinner($msg, $scriptBlock) {
-    $frames = @([char]0x25DC, [char]0x25DD, [char]0x25DE, [char]0x25DF)
-    $job = Start-Job -ScriptBlock $scriptBlock
-    $i = 0
-    while ($job.State -eq "Running") {
-        $frame = $frames[$i % $frames.Length]
-        Write-Host "`r       $frame $msg" -NoNewline -ForegroundColor DarkGray
-        Start-Sleep -Milliseconds 120
-        $i++
-    }
-    $result = Receive-Job $job -ErrorAction SilentlyContinue
-    Remove-Job $job -Force
-    Write-Host "`r       " -NoNewline
-    Write-Host ([char]0x2714) -NoNewline -ForegroundColor Green
-    Write-Host " $msg" -ForegroundColor DarkGray
-    return $result
-}
-
 function Write-SuccessBox($lines) {
     $maxLen = ($lines | Measure-Object -Maximum -Property Length).Maximum
     $border = [string]::new([char]0x2500, $maxLen + 4)
@@ -101,44 +77,6 @@ function Write-SuccessBox($lines) {
     Write-Host ""
 }
 
-# --- Uninstall ---
-
-if ($Uninstall) {
-    Write-Brand
-    Write-Header "  Uninstall Optivise Add-in"
-
-    $step = 1; $total = 2
-
-    Write-Step $step $total "Removing manifest file"
-    if (Test-Path $ManifestPath) {
-        Remove-Item $ManifestPath -Force
-        Write-Ok "Manifest removed"
-    } else {
-        Write-Ok "Already removed"
-    }
-
-    $step++
-    Write-Step $step $total "Cleaning up registry"
-    if (Test-Path $RegistryPath) {
-        Remove-Item $RegistryPath -Force
-        Write-Ok "Registry entry removed"
-    } else {
-        Write-Ok "Already clean"
-    }
-
-    # Clean up empty directory
-    if ((Test-Path $CatalogDir) -and @(Get-ChildItem $CatalogDir).Count -eq 0) {
-        Remove-Item $CatalogDir -Force -ErrorAction SilentlyContinue
-    }
-
-    Write-SuccessBox @(
-        "Optivise add-in uninstalled",
-        "",
-        "Restart any open Office apps to complete."
-    )
-    exit 0
-}
-
 # --- Install ---
 
 Write-Brand
@@ -157,17 +95,8 @@ Write-Ok $CatalogDir
 $step++
 Write-Step $step $total "Downloading manifest"
 try {
-    $url = $ManifestUrl
-    $content = Write-Spinner "Downloading from server..." {
-        $resp = Invoke-WebRequest -Uri $using:url -UseBasicParsing
-        return $resp.Content
-    }
-
-    # Fallback if job didn't return content (scope issue)
-    if (-not $content) {
-        $content = (Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing).Content
-        Write-Ok "Downloaded"
-    }
+    $content = (Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing).Content
+    Write-Ok "Downloaded"
 } catch {
     Write-Fail "Failed to download: $_"
     exit 1
@@ -203,3 +132,5 @@ Write-SuccessBox @(
     "  3. Click SHARED FOLDER",
     "  4. Add Optivise AI"
 )
+
+}
